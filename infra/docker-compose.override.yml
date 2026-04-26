@@ -45,3 +45,14 @@ services:
       - ENVIRONMENT=development
     networks:
       - irp-network
+
+  remediation-mcp:
+    build:
+      context: ..
+      dockerfile: services/mcp-servers/remediation/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - ENVIRONMENT=development
+    networks:
+      - irp-network
