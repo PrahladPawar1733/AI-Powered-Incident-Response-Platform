@@ -83,4 +83,4 @@ class AlertEvent(BaseModel):
         Used by Redis to prevent processing the same alert twice
         during a flapping incident.
         """
-        return f"{self.name}:{self.service}:{self.environment}"
+        return f"{self.tenant_id}:{self.name}:{self.service}:{self.environment}"

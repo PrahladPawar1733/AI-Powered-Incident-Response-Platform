@@ -66,7 +66,7 @@ class PostgresClient:
                     ) VALUES (
                         :incident_id, :tenant_id, :status, :alert_name, :service,
                         :severity, :root_cause, :resolution_summary,
-                        :mttr_seconds, :trace_id, :raw_context::jsonb, :created_at
+                        :mttr_seconds, :trace_id, CAST(:raw_context AS jsonb), :created_at
                     )
                     ON CONFLICT (incident_id) DO UPDATE SET
                         status             = EXCLUDED.status,
@@ -111,14 +111,12 @@ class PostgresClient:
                         1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
                     FROM runbooks
                     WHERE tenant_id = :tenant_id
-                      AND (service = ANY(CAST(:services AS text[]))
-                           OR :service = ANY(services))
+                      AND :service = ANY(services)
                     ORDER BY embedding <=> CAST(:embedding AS vector)
                     LIMIT :limit
                 """),
                 {
                     "embedding": str(embedding),
-                    "services":  "{" + service + "}",
                     "service":   service,
                     "tenant_id": tenant_id,
                     "limit":     limit,

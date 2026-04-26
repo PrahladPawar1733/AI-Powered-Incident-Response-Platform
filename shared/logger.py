@@ -18,7 +18,6 @@ def configure_logging(service_name: str, log_level: str = "INFO") -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
-            structlog.stdlib.add_logger_name,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.ConsoleRenderer()
             if _is_development()
