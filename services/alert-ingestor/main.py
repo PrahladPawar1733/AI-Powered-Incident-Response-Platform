@@ -5,7 +5,7 @@ from shared.logger import configure_logging, get_logger
 from shared.redis_client import init_redis
 from shared.kafka_utils import KafkaProducer
 
-from routes import prometheus, grafana, manual, webhook
+from routes import prometheus, grafana, manual, webhook, credentials
 
 # Configure structured logging for the service
 configure_logging(settings.service_name)
@@ -56,6 +56,9 @@ app.include_router(prometheus.router, prefix="/alerts")
 app.include_router(grafana.router, prefix="/alerts")
 app.include_router(manual.router, prefix="/alerts")
 app.include_router(webhook.router, prefix="/alerts")
+
+# Register credential management API
+app.include_router(credentials.router)
 
 @app.get("/health")
 async def health_check():

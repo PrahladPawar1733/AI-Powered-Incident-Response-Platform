@@ -72,6 +72,23 @@ CREATE TABLE IF NOT EXISTS approval_requests (
     resolved_at   TIMESTAMPTZ
 );
 
+-- ── Tenant Credentials ───────────────────────────────────────────
+-- Each tenant stores their infrastructure connection details here.
+-- The MCP servers load these dynamically per tenant_id.
+CREATE TABLE IF NOT EXISTS tenant_credentials (
+    id            SERIAL PRIMARY KEY,
+    tenant_id     TEXT UNIQUE NOT NULL,
+    credentials   JSONB NOT NULL DEFAULT '{}',   -- KubernetesCredential, PrometheusCredential, etc.
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_credentials_tenant ON tenant_credentials(tenant_id);
+
+CREATE TRIGGER tenant_credentials_touch
+    BEFORE UPDATE ON tenant_credentials
+    FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
 -- ── Indexes ───────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_incidents_status     ON incidents(status);
 CREATE INDEX IF NOT EXISTS idx_incidents_service    ON incidents(service);

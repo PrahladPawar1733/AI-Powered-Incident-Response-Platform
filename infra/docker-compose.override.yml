@@ -1,0 +1,47 @@
+services:
+  k8s-mcp:
+    build:
+      context: ..
+      dockerfile: services/mcp-servers/k8s/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT=development
+    networks:
+      - irp-network
+
+  db-mcp:
+    build:
+      context: ..
+      dockerfile: services/mcp-servers/db/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - ENVIRONMENT=development
+      - POSTGRES_URL=postgresql+asyncpg://agent_user:changeme@postgres:5432/incident_db
+    networks:
+      - irp-network
+    depends_on:
+      - postgres
+
+  logs-mcp:
+    build:
+      context: ..
+      dockerfile: services/mcp-servers/logs/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      - ENVIRONMENT=development
+    networks:
+      - irp-network
+
+  metrics-mcp:
+    build:
+      context: ..
+      dockerfile: services/mcp-servers/metrics/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - ENVIRONMENT=development
+    networks:
+      - irp-network
