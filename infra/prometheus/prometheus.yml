@@ -1,0 +1,69 @@
+# infra/prometheus/prometheus.yml
+# Prometheus scrape configuration for the incident response platform.
+#
+# Prometheus scrapes /metrics endpoints from each service every 15 seconds.
+# In Phase 9 (OpenTelemetry), services will expose custom metrics
+# (e.g., incident_mttr_seconds, agent_processing_duration_ms).
+
+global:
+  scrape_interval: 15s        # how often to scrape targets
+  evaluation_interval: 15s    # how often to evaluate alerting rules
+  scrape_timeout: 10s
+
+scrape_configs:
+  # ── Prometheus self-monitoring ─────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Alert Ingestor (Phase 2) ───────────────────────────────────────
+  - job_name: "alert-ingestor"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["alert-ingestor:8000"]
+        labels:
+          service: "alert-ingestor"
+
+  # ── MCP Servers (Phase 4) ──────────────────────────────────────────
+  - job_name: "k8s-mcp"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["k8s-mcp:8001"]
+        labels:
+          service: "k8s-mcp"
+
+  - job_name: "db-mcp"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["db-mcp:8002"]
+        labels:
+          service: "db-mcp"
+
+  - job_name: "logs-mcp"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["logs-mcp:8003"]
+        labels:
+          service: "logs-mcp"
+
+  - job_name: "metrics-mcp"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["metrics-mcp:8004"]
+        labels:
+          service: "metrics-mcp"
+
+  - job_name: "remediation-mcp"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["remediation-mcp:8005"]
+        labels:
+          service: "remediation-mcp"
+
+  # ── Dashboard (Phase 10) ───────────────────────────────────────────
+  - job_name: "dashboard"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["dashboard:8006"]
+        labels:
+          service: "dashboard"
