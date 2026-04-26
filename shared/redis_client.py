@@ -9,12 +9,12 @@ Handles:
 - Approval tokens (TTL based on risk level)
 - Session tracking
 
-Key patterns (from AGENT_CONTEXT §10):
-    alert:dedup:{fingerprint}         — string, 10 min TTL
-    incident:status:{incident_id}     — string, 24 hr TTL
-    incident:context:{incident_id}    — string (JSON), 24 hr TTL
-    approval:token:{request_id}       — string, per risk level
-    session:incident:{session_id}     — set, 24 hr TTL
+Key patterns (multi-tenant — tenant_id prefix on all keys):
+    alert:dedup:{tenant_id}:{fingerprint}         — string, 10 min TTL
+    incident:status:{tenant_id}:{incident_id}     — string, 24 hr TTL
+    incident:context:{tenant_id}:{incident_id}    — string (JSON), 24 hr TTL
+    approval:token:{tenant_id}:{request_id}       — string, per risk level
+    session:incident:{session_id}                  — set, 24 hr TTL
 
 Why redis.asyncio?
     All services in this platform are async (FastAPI, asyncpg).
@@ -58,7 +58,7 @@ class RedisClient:
 
     # ── Alert deduplication ──────────────────────────────────────────
 
-    async def is_duplicate(self, fingerprint: str) -> bool:
+    async def is_duplicate(self, tenant_id: str, fingerprint: str) -> bool:
         """
         Check if this alert fingerprint was seen in the last 10 minutes.
 
@@ -69,51 +69,55 @@ class RedisClient:
         During a real incident, Prometheus fires the same alert every
         evaluation interval (15-60 seconds). Without dedup, a single
         incident spawns dozens of IncidentContext objects.
+
+        Why tenant_id in the key?
+        Without it, Tenant A's alert could suppress Tenant B's identical
+        alert — a cross-tenant data leak.
         """
-        key = f"alert:dedup:{fingerprint}"
+        key = f"alert:dedup:{tenant_id}:{fingerprint}"
         exists = await self._redis.exists(key)
         return bool(exists)
 
-    async def mark_seen(self, fingerprint: str, ttl: int = DEDUP_TTL) -> None:
+    async def mark_seen(self, tenant_id: str, fingerprint: str, ttl: int = DEDUP_TTL) -> None:
         """
         Mark this fingerprint as seen. Uses SET with EX (TTL).
         After TTL expires, the same alert pattern will be treated as new.
         """
-        key = f"alert:dedup:{fingerprint}"
+        key = f"alert:dedup:{tenant_id}:{fingerprint}"
         await self._redis.set(key, "1", ex=ttl)
-        log.debug("alert_dedup_marked", fingerprint=fingerprint, ttl=ttl)
+        log.debug("alert_dedup_marked", tenant_id=tenant_id, fingerprint=fingerprint, ttl=ttl)
 
     # ── Incident status tracking ─────────────────────────────────────
 
     async def set_incident_status(
-        self, incident_id: str, status: str
+        self, tenant_id: str, incident_id: str, status: str
     ) -> None:
         """
         Cache the current incident status for fast lookups.
         The dashboard uses this to show live status without hitting Postgres.
         """
-        key = f"incident:status:{incident_id}"
+        key = f"incident:status:{tenant_id}:{incident_id}"
         await self._redis.set(key, status, ex=STATUS_TTL)
         log.debug("incident_status_set",
-                  incident_id=incident_id, status=status)
+                  tenant_id=tenant_id, incident_id=incident_id, status=status)
 
-    async def get_incident_status(self, incident_id: str) -> str | None:
+    async def get_incident_status(self, tenant_id: str, incident_id: str) -> str | None:
         """Get cached incident status. Returns None if expired/missing."""
-        key = f"incident:status:{incident_id}"
+        key = f"incident:status:{tenant_id}:{incident_id}"
         val = await self._redis.get(key)
         return val.decode("utf-8") if val else None
 
     # ── Incident context caching ─────────────────────────────────────
 
     async def cache_incident(
-        self, incident_id: str, context: dict[str, Any]
+        self, tenant_id: str, incident_id: str, context: dict[str, Any]
     ) -> None:
         """
         Cache the full IncidentContext JSON.
         Agents and the dashboard read this instead of hitting Postgres
         for in-progress incidents.
         """
-        key = f"incident:context:{incident_id}"
+        key = f"incident:context:{tenant_id}:{incident_id}"
         await self._redis.set(
             key,
             json.dumps(context, default=str),
@@ -121,12 +125,12 @@ class RedisClient:
         )
 
     async def get_cached_incident(
-        self, incident_id: str
+        self, tenant_id: str, incident_id: str
     ) -> dict[str, Any] | None:
         """
         Retrieve cached IncidentContext. Returns None if not cached.
         """
-        key = f"incident:context:{incident_id}"
+        key = f"incident:context:{tenant_id}:{incident_id}"
         val = await self._redis.get(key)
         if val:
             return json.loads(val.decode("utf-8"))
@@ -136,6 +140,7 @@ class RedisClient:
 
     async def set_approval_token(
         self,
+        tenant_id: str,
         request_id: str,
         risk_level: str,
         incident_id: str,
@@ -150,11 +155,12 @@ class RedisClient:
         The Slack approval handler looks up this token to verify
         the request is still valid before executing.
         """
-        key = f"approval:token:{request_id}"
+        key = f"approval:token:{tenant_id}:{request_id}"
         ttl = APPROVAL_TTLS.get(risk_level, 300)
         value = json.dumps({
             "request_id": request_id,
             "incident_id": incident_id,
+            "tenant_id": tenant_id,
             "risk_level": risk_level,
             "status": "pending",
         })
@@ -166,17 +172,17 @@ class RedisClient:
             await self._redis.set(key, value)
 
         log.info("approval_token_created",
-                 request_id=request_id, risk_level=risk_level,
-                 ttl=ttl if ttl > 0 else "no_expiry")
+                 tenant_id=tenant_id, request_id=request_id,
+                 risk_level=risk_level, ttl=ttl if ttl > 0 else "no_expiry")
 
     async def get_approval_token(
-        self, request_id: str
+        self, tenant_id: str, request_id: str
     ) -> dict[str, Any] | None:
         """
         Retrieve an approval token. Returns None if expired or missing.
         An expired token means the approval window closed → escalate.
         """
-        key = f"approval:token:{request_id}"
+        key = f"approval:token:{tenant_id}:{request_id}"
         val = await self._redis.get(key)
         if val:
             return json.loads(val.decode("utf-8"))
@@ -184,6 +190,7 @@ class RedisClient:
 
     async def resolve_approval_token(
         self,
+        tenant_id: str,
         request_id: str,
         status: str,
         approved_by: str | None = None,
@@ -192,7 +199,7 @@ class RedisClient:
         Mark an approval token as approved/rejected.
         Returns False if the token expired (TTL elapsed).
         """
-        key = f"approval:token:{request_id}"
+        key = f"approval:token:{tenant_id}:{request_id}"
         val = await self._redis.get(key)
         if not val:
             return False  # expired or doesn't exist
@@ -210,8 +217,8 @@ class RedisClient:
             await self._redis.set(key, json.dumps(token))
 
         log.info("approval_token_resolved",
-                 request_id=request_id, status=status,
-                 approved_by=approved_by)
+                 tenant_id=tenant_id, request_id=request_id,
+                 status=status, approved_by=approved_by)
         return True
 
     # ── Session tracking ─────────────────────────────────────────────

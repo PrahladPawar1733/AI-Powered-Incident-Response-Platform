@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     service_name: str = Field(default="unknown")
 
+    # ── Multi-tenancy ────────────────────────────────────────────────
+    jwt_secret_key: str = Field(
+        default="dev-secret-change-in-production",
+        description="JWT signing key — for dev/testing. Production uses a vault."
+    )
+    jwt_algorithm: str = Field(default="HS256")
+    default_tenant_id: str = Field(
+        default="default",
+        description="Used for dev/testing when no JWT is present"
+    )
+
     class Config:
         env_file = str(Path(__file__).parent.parent / ".env")
         env_file_encoding = "utf-8"

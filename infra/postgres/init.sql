@@ -10,6 +10,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;       -- trigram index for text search
 CREATE TABLE IF NOT EXISTS incidents (
     id                 SERIAL PRIMARY KEY,
     incident_id        TEXT UNIQUE NOT NULL,
+    tenant_id          TEXT NOT NULL DEFAULT 'default',  -- multi-tenant isolation
     status             TEXT NOT NULL DEFAULT 'triaging',
     alert_name         TEXT NOT NULL,
     service            TEXT NOT NULL,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS incidents (
 CREATE TABLE IF NOT EXISTS runbooks (
     id          SERIAL PRIMARY KEY,
     runbook_id  TEXT UNIQUE NOT NULL,
+    tenant_id   TEXT NOT NULL DEFAULT 'default',  -- multi-tenant isolation
     title       TEXT NOT NULL,
     description TEXT NOT NULL,
     services    TEXT[] NOT NULL DEFAULT '{}',
@@ -78,6 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_incidents_created    ON incidents(created_at DESC
 CREATE INDEX IF NOT EXISTS idx_audit_incident       ON audit_events(incident_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created        ON audit_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_approvals_status     ON approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_incidents_tenant     ON incidents(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_runbooks_tenant      ON runbooks(tenant_id);
 
 -- pgvector HNSW index — much faster than exact search at scale
 -- HNSW = Hierarchical Navigable Small World graph

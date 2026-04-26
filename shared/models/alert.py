@@ -62,6 +62,7 @@ class AlertEvent(BaseModel):
     service speaks one language.
     """
     alert_id:    str = Field(default_factory=lambda: str(uuid4()))
+    tenant_id:   str = "default"             # set by JWT middleware, NEVER trusted from client
     source:      AlertSource
     status:      AlertStatus = AlertStatus.FIRING
     severity:    Severity | None = None      # None until triage sets it

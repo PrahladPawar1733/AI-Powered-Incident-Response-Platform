@@ -71,6 +71,7 @@ class IncidentContext(BaseModel):
     every agent reads it, adds to it, passes it on.
     """
     incident_id:   str = Field(default_factory=lambda: str(uuid4()))
+    tenant_id:     str = "default"               # forwarded from AlertEvent, never changed
     status:        IncidentStatus = IncidentStatus.TRIAGING
     alert:         AlertEvent
 

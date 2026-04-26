@@ -60,11 +60,11 @@ class PostgresClient:
             await sess.execute(
                 text("""
                     INSERT INTO incidents (
-                        incident_id, status, alert_name, service,
+                        incident_id, tenant_id, status, alert_name, service,
                         severity, root_cause, resolution_summary,
                         mttr_seconds, trace_id, raw_context, created_at
                     ) VALUES (
-                        :incident_id, :status, :alert_name, :service,
+                        :incident_id, :tenant_id, :status, :alert_name, :service,
                         :severity, :root_cause, :resolution_summary,
                         :mttr_seconds, :trace_id, :raw_context::jsonb, :created_at
                     )
@@ -85,6 +85,7 @@ class PostgresClient:
         self,
         embedding: list[float],
         service: str,
+        tenant_id: str,
         limit: int = 3,
     ) -> list[dict[str, Any]]:
         """
@@ -109,8 +110,9 @@ class PostgresClient:
                         tags,
                         1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
                     FROM runbooks
-                    WHERE service = ANY(CAST(:services AS text[]))
-                       OR :service = ANY(services)
+                    WHERE tenant_id = :tenant_id
+                      AND (service = ANY(CAST(:services AS text[]))
+                           OR :service = ANY(services))
                     ORDER BY embedding <=> CAST(:embedding AS vector)
                     LIMIT :limit
                 """),
@@ -118,6 +120,7 @@ class PostgresClient:
                     "embedding": str(embedding),
                     "services":  "{" + service + "}",
                     "service":   service,
+                    "tenant_id": tenant_id,
                     "limit":     limit,
                 },
             )
@@ -126,6 +129,7 @@ class PostgresClient:
     async def find_similar_incidents(
         self,
         embedding: list[float],
+        tenant_id: str,
         limit: int = 3,
     ) -> list[dict[str, Any]]:
         """
@@ -147,12 +151,13 @@ class PostgresClient:
                         resolved_at,
                         1 - (embedding <=> CAST(:embedding AS vector)) AS similarity_score
                     FROM incidents
-                    WHERE status = 'resolved'
+                    WHERE tenant_id = :tenant_id
+                      AND status = 'resolved'
                       AND embedding IS NOT NULL
                     ORDER BY embedding <=> CAST(:embedding AS vector)
                     LIMIT :limit
                 """),
-                {"embedding": str(embedding), "limit": limit},
+                {"embedding": str(embedding), "tenant_id": tenant_id, "limit": limit},
             )
             return [dict(row._mapping) for row in result]
 

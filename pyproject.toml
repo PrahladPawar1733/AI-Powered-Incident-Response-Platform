@@ -21,6 +21,7 @@ dependencies = [
     "fastmcp>=0.1",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
+    "PyJWT>=2.8",
 ]
 
 [tool.setuptools.packages.find]
