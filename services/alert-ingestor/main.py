@@ -5,7 +5,7 @@ from shared.logger import configure_logging, get_logger
 from shared.redis_client import init_redis
 from shared.kafka_utils import KafkaProducer
 
-from routes import prometheus, grafana, manual, webhook, credentials, approvals
+from routes import prometheus, grafana, manual, webhook, credentials, approvals, dashboard, auth
 
 # Configure structured logging for the service
 configure_logging(settings.service_name)
@@ -51,6 +51,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS for frontend
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Register routes under /alerts
 app.include_router(prometheus.router, prefix="/alerts")
 app.include_router(grafana.router, prefix="/alerts")
@@ -62,6 +72,12 @@ app.include_router(credentials.router)
 
 # Register approval API (human-in-the-loop)
 app.include_router(approvals.router)
+
+# Register dashboard API
+app.include_router(dashboard.router)
+
+# Register auth API
+app.include_router(auth.router)
 
 @app.get("/health")
 async def health_check():
