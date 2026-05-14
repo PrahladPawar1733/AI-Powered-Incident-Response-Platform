@@ -1,13 +1,55 @@
-# .gitignore
-__pycache__/
-*.pyc
+# ── Secrets & environment ─────────────────────────────────────────────────────
 .env
-.venv/
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
+.venv/
+env/
 *.egg-info/
-.pytest_cache/
-.mypy_cache/
-*.log
-.DS_Store
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+htmlcov/
+.coverage
+.coverage.*
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+.npm
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+*.DS_Store
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ── Docker volumes (local state) ──────────────────────────────────────────────
+infra/volumes/
+grafana_data/
+postgres_data/
+
+# ── Misc project files ────────────────────────────────────────────────────────
+*.pdf
+AGENT_CONTEXT.md

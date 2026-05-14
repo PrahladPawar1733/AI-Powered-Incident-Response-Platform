@@ -28,7 +28,7 @@ Wait ~10 seconds for Kafka and Postgres to fully initialize.
 ## Step 2: Activate Python Environment
 
 ```bash
-cd /path/to/incident-response-platform
+cd incident-response-platform
 source venv/bin/activate
 ```
 
@@ -218,8 +218,8 @@ curl -X POST http://localhost:8000/approvals/{request_id}/approve?approved_by=pr
 Make sure these are set (create a `.env` file in the project root):
 
 ```env
-ANTHROPIC_API_KEY=your-api-key-here
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL=gemini-2.5-flash
 KAFKA_BOOTSTRAP_SERVERS=localhost:29092
 POSTGRES_URL=postgresql+asyncpg://agent_user:changeme@localhost:5432/incident_db
 REDIS_URL=redis://localhost:6379/0
@@ -240,8 +240,8 @@ Make sure the alert-ingestor published successfully first. Check with:
 curl http://localhost:8000/health
 ```
 
-### "401 Unauthorized from Anthropic"
-Set a valid `ANTHROPIC_API_KEY` in your `.env` file. The agents will still work with fallback logic, but the LLM-powered triage/diagnosis/remediation will be limited.
+### "API error from Gemini"
+Set a valid `GEMINI_API_KEY` in your `.env` file. Get one free at https://aistudio.google.com/.
 
 ### "Database connection failed"
 ```bash
