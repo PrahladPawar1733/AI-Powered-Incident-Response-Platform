@@ -4,7 +4,25 @@ An AI-powered, multi-tenant incident response platform that automatically triage
 
 > Fire an alert → watch AI agents triage the severity, diagnose the root cause using live infrastructure data, and execute (or propose for approval) the remediation — all within seconds.
 
-![Platform Screenshot](docs/screenshot.png)
+---
+
+## 📸 Screenshots
+
+### Real-Time Dashboard
+A single pane of glass to monitor all incidents flowing through the autonomous pipeline. Shows real-time statuses (Triaging, Diagnosing, Remediating, Escalated) and tracks metrics like Mean Time To Resolve (MTTR).
+
+![Incident Dashboard](docs/dashboard.png)
+
+### Slack Integrations & Human-in-the-Loop
+Per-tenant Slack notifications formatted with Block Kit. Agents provide detailed summaries of the incident, confidence scores, matched runbooks, and request human approval for high-risk remediation actions.
+
+![Slack Notifications](docs/slack-notifications.png)
+
+### Event-Driven Architecture
+Powered by Apache Kafka, ensuring decoupled, scalable, and resilient communication between the Alert Ingestor, Triage Agent, Diagnosis Agent, and Remediation Agent.
+
+![Kafka Topics](docs/kafka-topics.png)
+![Kafka Consumers](docs/kafka-consumers.png)
 
 ---
 
