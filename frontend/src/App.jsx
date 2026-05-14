@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './index.css';
 import { isLoggedIn, getCurrentUser, logout } from './api';
 import Login from './pages/Login';
@@ -21,6 +21,21 @@ export default function App() {
   const [selectedIncident, setSelectedIncident] = useState(null);
 
   const user = getCurrentUser();
+
+  // Validate stored token on mount — force re-login if expired
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+    const token = user.token;
+    if (!token) return;
+    fetch('http://localhost:8000/dashboard/stats', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(res => {
+      if (res.status === 401) {
+        logout();
+        setLoggedIn(false);
+      }
+    }).catch(() => {}); // ignore network errors (server might be starting)
+  }, []);
 
   const handleLogin = () => {
     setLoggedIn(true);

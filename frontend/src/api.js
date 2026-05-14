@@ -74,22 +74,31 @@ export function getCurrentUser() {
 
 // ── Dashboard ─────────────────────────────────────────────────
 export async function fetchIncidents(status = null) {
-  const tid = getTenantId();
-  const params = new URLSearchParams({ tenant_id: tid, limit: '50' });
+  const params = new URLSearchParams({ limit: '50' });
   if (status) params.set('status', status);
   const res = await fetch(`${API}/dashboard/incidents?${params}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
 export async function fetchIncidentDetail(id) {
-  const tid = getTenantId();
-  const res = await fetch(`${API}/dashboard/incidents/${id}?tenant_id=${tid}`, { headers: authHeaders() });
+  const res = await fetch(`${API}/dashboard/incidents/${id}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
 export async function fetchStats() {
-  const tid = getTenantId();
-  const res = await fetch(`${API}/dashboard/stats?tenant_id=${tid}`, { headers: authHeaders() });
+  const res = await fetch(`${API}/dashboard/stats`, { headers: authHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 

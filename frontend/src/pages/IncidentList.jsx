@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchIncidents, fetchStats } from '../api';
 
 const STATUS_FILTERS = [null, 'triaging', 'diagnosing', 'remediating', 'resolved', 'escalated'];
@@ -8,9 +8,11 @@ export default function IncidentList({ onSelect }) {
   const [stats, setStats] = useState(null);
   const [filter, setFilter] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const isFirstLoad = useRef(true);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (showSpinner = false) => {
+    if (showSpinner || isFirstLoad.current) setLoading(true);
     try {
       const [incData, statData] = await Promise.all([
         fetchIncidents(filter),
@@ -18,17 +20,24 @@ export default function IncidentList({ onSelect }) {
       ]);
       setIncidents(incData.incidents || []);
       setStats(statData);
+      setError(null);
+      isFirstLoad.current = false;
     } catch (e) {
       console.error(e);
+      setError(e.message || 'Failed to load incidents');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  useEffect(() => { load(); }, [filter]);
-
-  // Auto-refresh every 5s
   useEffect(() => {
-    const timer = setInterval(load, 5000);
+    isFirstLoad.current = true;
+    load(true);
+  }, [filter]);
+
+  // Auto-refresh every 5s — no spinner, silent background refresh
+  useEffect(() => {
+    const timer = setInterval(() => load(false), 5000);
     return () => clearInterval(timer);
   }, [filter]);
 
@@ -99,6 +108,15 @@ export default function IncidentList({ onSelect }) {
 
         {loading ? (
           <div className="loading"><div className="spinner" /></div>
+        ) : error ? (
+          <div className="empty-state">
+            <div className="empty-icon">⚠️</div>
+            <h3>Could not load incidents</h3>
+            <p style={{ color: 'var(--status-escalated)' }}>{error}</p>
+            <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => load(true)}>
+              Retry
+            </button>
+          </div>
         ) : incidents.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>
