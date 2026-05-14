@@ -16,6 +16,7 @@ from shared.redis_client import init_redis
 from shared.models.incident import IncidentContext, IncidentStatus
 from shared.config import settings
 from shared.logger import configure_logging, get_logger
+from shared.slack_notifier import notify_incident_resolved, notify_incident_escalated
 
 from agent import RemediationAgent
 
@@ -135,6 +136,31 @@ async def run_worker():
                 key=key,
                 headers={"tenant_id": tenant_id},
             )
+
+            # 5. Send Slack notification (per-tenant credentials)
+            try:
+                sev = incident.severity.value if incident.severity else "unknown"
+                if incident.status == IncidentStatus.RESOLVED:
+                    await notify_incident_resolved(
+                        tenant_id=tenant_id,
+                        incident_id=incident.incident_id,
+                        alert_name=incident.alert.name,
+                        service=incident.alert.service,
+                        severity=sev,
+                        resolution_summary=incident.resolution_summary or "",
+                        mttr_seconds=incident.mttr_seconds(),
+                    )
+                else:
+                    await notify_incident_escalated(
+                        tenant_id=tenant_id,
+                        incident_id=incident.incident_id,
+                        alert_name=incident.alert.name,
+                        service=incident.alert.service,
+                        severity=sev,
+                        reason=incident.resolution_summary or "Action rejected or expired",
+                    )
+            except Exception as slack_err:
+                log.warning("slack_notification_failed", error=str(slack_err))
 
             log.info(
                 "incident_remediation_persisted",

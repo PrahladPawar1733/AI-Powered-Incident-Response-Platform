@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from shared.redis_client import RedisClient
 from shared.logger import get_logger
+from shared.slack_notifier import notify_approval_request as _notify_slack_approval
 
 log = get_logger("approval-gate")
 
@@ -31,6 +32,8 @@ async def request_approval(
     incident_id: str,
     action_summary: str,
     risk_level: str,
+    alert_name: str = "",
+    service: str = "",
 ) -> str:
     """
     Create an approval request and return the request_id.
@@ -53,8 +56,20 @@ async def request_approval(
         action=action_summary,
     )
 
-    # In production, this is where you'd post to Slack:
-    # await slack.post_approval_message(channel, incident_id, action_summary, request_id)
+    # Post approval request to tenant's Slack approvals channel
+    try:
+        await _notify_slack_approval(
+            tenant_id=tenant_id,
+            incident_id=incident_id,
+            request_id=request_id,
+            action_summary=action_summary,
+            risk_level=risk_level,
+            alert_name=alert_name,
+            service=service,
+        )
+    except Exception as e:
+        log.warning("slack_approval_notification_failed", error=str(e))
+
     log.info(
         "HUMAN_ACTION_REQUIRED",
         message=f"Approve via: POST /approvals/{request_id}/approve",

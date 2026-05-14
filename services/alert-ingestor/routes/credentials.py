@@ -14,6 +14,7 @@ from shared.models.credentials import (
     PrometheusCredential,
     LokiCredential,
     DatabaseCredential,
+    SlackCredential,
 )
 from shared.credential_store import save_credentials, get_credentials, delete_credentials
 
@@ -50,6 +51,14 @@ async def get_my_credentials(tenant_id: str = Depends(extract_tenant)):
         result["database"] = {
             "db_type": creds.database.db_type,
             "connection_url": "***REDACTED***",
+        }
+    if creds.slack:
+        result["slack"] = {
+            "bot_token": "xoxb-***REDACTED***",
+            "incidents_channel": creds.slack.incidents_channel,
+            "approvals_channel": creds.slack.approvals_channel,
+            "escalation_channel": creds.slack.escalation_channel,
+            "enabled": creds.slack.enabled,
         }
     return result
 
@@ -100,6 +109,30 @@ async def set_database(
     existing.database = cred
     await save_credentials(existing)
     return {"message": "Database credentials saved", "db_type": cred.db_type}
+
+
+@router.put("/slack", summary="Register Slack workspace")
+async def set_slack(
+    cred: SlackCredential,
+    tenant_id: str = Depends(extract_tenant),
+):
+    """Register or update Slack workspace credentials for this tenant.
+
+    Setup steps:
+      1. Go to https://api.slack.com/apps → Create New App
+      2. Add OAuth scopes: chat:write, channels:read, reactions:read, users:read
+      3. Install to workspace → copy Bot User OAuth Token (xoxb-...)
+      4. Invite bot to channels: /invite @YourBot
+    """
+    existing = await get_credentials(tenant_id) or TenantCredentials(tenant_id=tenant_id)
+    existing.slack = cred
+    await save_credentials(existing)
+    return {
+        "message": "Slack credentials saved",
+        "incidents_channel": cred.incidents_channel,
+        "approvals_channel": cred.approvals_channel,
+        "enabled": cred.enabled,
+    }
 
 
 @router.delete("/", summary="Delete all my credentials")

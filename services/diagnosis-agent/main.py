@@ -19,6 +19,7 @@ from shared.models.incident import IncidentContext, IncidentStatus
 from shared.models.alert import Severity
 from shared.config import settings
 from shared.logger import configure_logging, get_logger
+from shared.slack_notifier import notify_diagnosis_complete
 
 from agent import DiagnosisAgent
 
@@ -149,6 +150,22 @@ async def run_worker():
                 key=key,
                 headers={"tenant_id": tenant_id},
             )
+
+            # 5. Send Slack notification (per-tenant credentials)
+            try:
+                if incident.status != IncidentStatus.RESOLVED:  # Only for P1/P2
+                    await notify_diagnosis_complete(
+                        tenant_id=tenant_id,
+                        incident_id=incident.incident_id,
+                        alert_name=incident.alert.name,
+                        service=incident.alert.service,
+                        severity=incident.severity.value if incident.severity else "unknown",
+                        root_cause=incident.root_cause or "",
+                        diagnosis_summary=incident.diagnosis_summary or "",
+                        evidence_count=len(incident.evidence),
+                    )
+            except Exception as slack_err:
+                log.warning("slack_notification_failed", error=str(slack_err))
 
             log.info(
                 "incident_diagnosis_persisted",

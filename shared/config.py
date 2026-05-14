@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     error if the variable is missing. Field(default=...) is optional.
     """
 
-    # ── Anthropic ────────────────────────────────────────────────────
-    anthropic_api_key: str = Field(..., description="Anthropic API key")
-    anthropic_model: str = Field(
-        default="claude-opus-4-5",
+    # ── Gemini ───────────────────────────────────────────────────────
+    gemini_api_key: str = Field(..., description="Gemini API key")
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
         description="Model used by all agents"
     )
 

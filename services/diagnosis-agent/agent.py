@@ -2,24 +2,25 @@
 Diagnosis Agent — Multi-Turn Agentic Loop.
 
 This is the most sophisticated agent in the platform. Unlike the Triage Agent
-which makes a single LLM call, the Diagnosis Agent runs a loop where Claude
+which makes a single LLM call, the Diagnosis Agent runs a loop where Gemini
 autonomously decides which tools to call, examines results, and keeps
 investigating until it determines the root cause.
 
 The loop pattern:
-1. Send incident context + available tools to Claude
-2. Claude responds with tool_use blocks (e.g. "call get_pod_status")
+1. Send incident context + available tools to Gemini
+2. Gemini responds with tool_use blocks (e.g. "call get_pod_status")
 3. We execute those tools against the MCP servers
-4. We send the results back to Claude
-5. Claude either requests more tools or outputs the final diagnosis
-6. Repeat until Claude returns end_turn or we hit MAX_TOOL_CALLS
+4. We send the results back to Gemini
+5. Gemini either requests more tools or outputs the final diagnosis
+6. Repeat until Gemini returns end_turn or we hit MAX_TOOL_CALLS
 """
 from __future__ import annotations
 
 import json
 from datetime import datetime
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from shared.models.incident import IncidentContext, IncidentStatus, Evidence
 from shared.config import settings
@@ -38,13 +39,13 @@ log = get_logger("diagnosis-agent")
 
 class DiagnosisAgent:
     def __init__(self):
-        self.llm = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.llm = genai.Client(api_key=settings.gemini_api_key)
 
     async def diagnose(self, incident: IncidentContext) -> IncidentContext:
         """
         Run the full diagnosis lifecycle for a triaged incident.
 
-        This is where the magic happens — Claude acts as an autonomous
+        This is where the magic happens — Gemini acts as an autonomous
         investigator, calling diagnostic tools and reasoning about the
         results until it can determine the root cause.
         """
@@ -63,7 +64,7 @@ class DiagnosisAgent:
         user_prompt = self._build_prompt(incident)
 
         # The conversation history for the agentic loop
-        messages = [{"role": "user", "content": user_prompt}]
+        messages = [{"role": "user", "parts": [{"text": user_prompt}]}]
 
         tool_call_count = 0
 
@@ -76,19 +77,20 @@ class DiagnosisAgent:
                     loop_iteration=tool_call_count,
                 )
 
-                response = await self.llm.messages.create(
-                    model=settings.anthropic_model,
-                    system=DIAGNOSIS_SYSTEM_PROMPT,
-                    messages=messages,
-                    tools=DIAGNOSTIC_TOOLS,
-                    temperature=AGENT_TEMPERATURE,
-                    max_tokens=MAX_TOKENS,
+                response = await self.llm.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=messages,
+                    config=types.GenerateContentConfig(
+                        system_instruction=DIAGNOSIS_SYSTEM_PROMPT,
+                        tools=DIAGNOSTIC_TOOLS,
+                        temperature=AGENT_TEMPERATURE,
+                        max_output_tokens=MAX_TOKENS,
+                    )
                 )
 
-                # Check stop reason
-                if response.stop_reason == "end_turn":
-                    # Claude is done — extract the final diagnosis
-                    final_text = self._extract_text(response)
+                if not response.function_calls:
+                    # Gemini is done — extract the final diagnosis
+                    final_text = response.text
                     diagnosis = self._parse_diagnosis(final_text)
                     incident = self._apply_diagnosis(incident, diagnosis)
                     log.info(
@@ -99,61 +101,50 @@ class DiagnosisAgent:
                         tool_calls=tool_call_count,
                     )
                     return incident
-
-                elif response.stop_reason == "tool_use":
-                    # Claude wants to call tools — execute them
-                    # First, add Claude's response (with tool_use blocks) to messages
-                    messages.append({"role": "assistant", "content": response.content})
-
-                    # Process each tool_use block
-                    tool_results = []
-                    for block in response.content:
-                        if block.type == "tool_use":
-                            tool_call_count += 1
-                            tool_name = block.name
-                            tool_input = block.input
-
-                            log.info(
-                                "tool_call",
-                                incident_id=incident.incident_id,
-                                tool=tool_name,
-                                input_keys=list(tool_input.keys()),
-                                call_number=tool_call_count,
-                            )
-
-                            # Execute the tool against the MCP server
-                            result = await execute_tool(tool_name, tool_input)
-
-                            # Store as evidence on the incident
-                            source = TOOL_SOURCE.get(tool_name, "unknown")
-                            incident.add_evidence(
-                                source=source,
-                                tool=tool_name,
-                                content=result[:2000],  # Cap evidence size
-                                relevance=f"Called by diagnosis agent during investigation (call #{tool_call_count})",
-                            )
-
-                            # Add tool result for Claude
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": result[:4000],  # Cap for token limits
-                            })
-
-                    # Send all tool results back to Claude
-                    messages.append({"role": "user", "content": tool_results})
-
                 else:
-                    # Unexpected stop reason — extract whatever we can
-                    log.warning(
-                        "unexpected_stop_reason",
-                        stop_reason=response.stop_reason,
-                        incident_id=incident.incident_id,
-                    )
-                    final_text = self._extract_text(response)
-                    diagnosis = self._parse_diagnosis(final_text)
-                    incident = self._apply_diagnosis(incident, diagnosis)
-                    return incident
+                    # Gemini wants to call tools — execute them
+                    if response.candidates and response.candidates[0].content:
+                        messages.append(response.candidates[0].content)
+
+                    # Process each function call
+                    tool_parts = []
+                    for call in response.function_calls:
+                        tool_call_count += 1
+                        tool_name = call.name
+                        
+                        # call.args is a protobuf Struct, convert to dict
+                        tool_input = dict(call.args) if call.args else {}
+
+                        log.info(
+                            "tool_call",
+                            incident_id=incident.incident_id,
+                            tool=tool_name,
+                            input_keys=list(tool_input.keys()),
+                            call_number=tool_call_count,
+                        )
+
+                        # Execute the tool against the MCP server
+                        result = await execute_tool(tool_name, tool_input)
+
+                        # Store as evidence on the incident
+                        source = TOOL_SOURCE.get(tool_name, "unknown")
+                        incident.add_evidence(
+                            source=source,
+                            tool=tool_name,
+                            content=result[:2000],  # Cap evidence size
+                            relevance=f"Called by diagnosis agent during investigation (call #{tool_call_count})",
+                        )
+
+                        # Add tool result for Gemini
+                        tool_parts.append(
+                            types.Part.from_function_response(
+                                name=tool_name,
+                                response={"result": result[:4000]}
+                            )
+                        )
+
+                    # Send all tool results back to Gemini
+                    messages.append({"role": "user", "parts": tool_parts})
 
             # ── MAX TOOL CALLS REACHED ────────────────────────────────
             log.warning(
@@ -161,23 +152,25 @@ class DiagnosisAgent:
                 incident_id=incident.incident_id,
                 tool_calls=tool_call_count,
             )
-            # Ask Claude for a final verdict with what it has
+            # Ask Gemini for a final verdict with what it has
             messages.append({
                 "role": "user",
-                "content": (
+                "parts": [{"text": (
                     "You've reached the maximum number of tool calls. "
                     "Based on the evidence collected so far, provide your best "
                     "diagnosis as JSON now."
-                ),
+                )}]
             })
-            response = await self.llm.messages.create(
-                model=settings.anthropic_model,
-                system=DIAGNOSIS_SYSTEM_PROMPT,
-                messages=messages,
-                temperature=AGENT_TEMPERATURE,
-                max_tokens=MAX_TOKENS,
+            response = await self.llm.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    system_instruction=DIAGNOSIS_SYSTEM_PROMPT,
+                    temperature=AGENT_TEMPERATURE,
+                    max_output_tokens=MAX_TOKENS,
+                )
             )
-            final_text = self._extract_text(response)
+            final_text = response.text
             diagnosis = self._parse_diagnosis(final_text)
             incident = self._apply_diagnosis(incident, diagnosis)
             return incident
@@ -232,15 +225,8 @@ Please investigate this incident using the available diagnostic tools and determ
 """
         return prompt
 
-    def _extract_text(self, response) -> str:
-        """Extract text content from Claude's response."""
-        for block in response.content:
-            if hasattr(block, "text"):
-                return block.text
-        return ""
-
     def _parse_diagnosis(self, text: str) -> dict:
-        """Parse the JSON diagnosis from Claude's response."""
+        """Parse the JSON diagnosis from Gemini's response."""
         try:
             # Try to extract JSON if wrapped in markdown code block
             if "```json" in text:

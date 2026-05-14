@@ -5,9 +5,9 @@ ENV SERVICE_NAME=k8s-mcp
 
 WORKDIR /app
 
-COPY shared/pyproject.toml shared/
+COPY pyproject.toml .
 COPY shared/ shared/
-RUN pip install --no-cache-dir -e ./shared
+RUN pip install --no-cache-dir -e .
 
 COPY services/mcp-servers/k8s/ services/mcp-servers/k8s/
 

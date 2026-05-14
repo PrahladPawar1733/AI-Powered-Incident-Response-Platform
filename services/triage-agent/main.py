@@ -9,6 +9,7 @@ from shared.redis_client import init_redis
 from shared.models.alert import AlertEvent
 from shared.config import settings
 from shared.logger import configure_logging, get_logger
+from shared.slack_notifier import notify_incident_triaged
 from agent import TriageAgent
 
 configure_logging(settings.service_name or "triage-agent")
@@ -95,6 +96,21 @@ async def run_worker():
                 key=key,
                 headers={"tenant_id": tenant_id}
             )
+            
+            # 5. Send Slack notification (per-tenant credentials)
+            try:
+                await notify_incident_triaged(
+                    tenant_id=tenant_id,
+                    incident_id=incident.incident_id,
+                    alert_name=alert.name,
+                    service=alert.service,
+                    severity=incident.severity.value,
+                    triage_summary=incident.triage_summary,
+                    confidence=incident.triage_confidence,
+                    matched_runbook=incident.matched_runbook_id,
+                )
+            except Exception as slack_err:
+                log.warning("slack_notification_failed", error=str(slack_err))
             
             log.info("incident_fully_triaged_and_persisted", incident_id=incident.incident_id)
             

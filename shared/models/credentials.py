@@ -21,6 +21,7 @@ class CredentialType(str, Enum):
     PROMETHEUS = "prometheus"
     LOKI       = "loki"
     DATABASE   = "database"
+    SLACK      = "slack"
 
 
 class KubernetesCredential(BaseModel):
@@ -69,6 +70,42 @@ class DatabaseCredential(BaseModel):
     ssl_mode: str = Field(default="prefer")
 
 
+class SlackCredential(BaseModel):
+    """
+    Per-tenant Slack workspace configuration.
+
+    Each tenant brings their own Slack bot token so incident notifications
+    and human-approval workflows go to the correct workspace/channels.
+
+    Setup guide:
+      1. Go to https://api.slack.com/apps → Create New App
+      2. Under OAuth & Permissions, add scopes: chat:write, channels:read,
+         reactions:read, users:read
+      3. Install to workspace → copy the Bot User OAuth Token (xoxb-...)
+      4. Invite the bot to the desired channels: /invite @YourBot
+    """
+    bot_token: str = Field(
+        ...,
+        description="Slack Bot User OAuth Token — starts with xoxb-"
+    )
+    incidents_channel: str = Field(
+        default="#incidents",
+        description="Channel for incident lifecycle notifications (triage, diagnosis, resolution)"
+    )
+    approvals_channel: str = Field(
+        default="#incident-approvals",
+        description="Channel where human-approval requests are posted (Approve/Reject buttons)"
+    )
+    escalation_channel: Optional[str] = Field(
+        default=None,
+        description="Optional separate channel for P1 escalations. Falls back to incidents_channel."
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Toggle Slack notifications on/off without deleting credentials"
+    )
+
+
 class TenantCredentials(BaseModel):
     """
     All infrastructure credentials for a single tenant.
@@ -79,5 +116,6 @@ class TenantCredentials(BaseModel):
     prometheus: Optional[PrometheusCredential] = None
     loki: Optional[LokiCredential] = None
     database: Optional[DatabaseCredential] = None
+    slack: Optional[SlackCredential] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

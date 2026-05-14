@@ -18,12 +18,12 @@ log = get_logger("diagnosis-tools")
 # These are sent to Claude so it knows what tools are available.
 # Claude will return tool_use blocks referencing these names.
 
-DIAGNOSTIC_TOOLS = [
+_RAW_TOOLS = [
     # ── K8s MCP Tools ──────────────────────────────────────────────
     {
         "name": "get_pod_status",
         "description": "Get the status of pods for a specific service in a Kubernetes namespace. Shows pod names, phase (Running/CrashLoopBackOff), restart counts, and creation time.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string", "description": "The tenant ID from the incident context"},
@@ -36,7 +36,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_pod_logs",
         "description": "Get the last N log lines for a specific pod. Use previous=true to get logs from a crashed container.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -51,7 +51,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_recent_events",
         "description": "Get recent Kubernetes events filtered by service. Shows warnings, errors, and scheduling events.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -66,7 +66,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_connection_count",
         "description": "Get current database connections grouped by state (active, idle, idle_in_transaction). Useful for diagnosing connection pool exhaustion.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -78,7 +78,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_slow_queries",
         "description": "Get queries currently running longer than the threshold. Useful for diagnosing database latency issues.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -91,7 +91,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_lock_waits",
         "description": "Get queries that are blocked waiting for locks. Critical for diagnosing deadlocks.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -102,7 +102,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "check_table_bloat",
         "description": "Check tables with high dead tuple ratio indicating they need VACUUM. Useful for slow query diagnosis.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -115,7 +115,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "search_logs",
         "description": "Search log lines matching a query string for a specific service. Returns timestamped log lines from Loki.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -130,7 +130,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_error_rate",
         "description": "Get error log count and rate per minute for a service. Useful for determining if errors are increasing.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -143,7 +143,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "correlate_by_trace_id",
         "description": "Get all log lines across ALL services sharing a trace_id. Powerful for tracing a request across microservices.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -156,7 +156,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "query_prometheus",
         "description": "Execute a raw PromQL query against Prometheus. Returns JSON result. Use for custom metric queries.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -169,7 +169,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_service_latency",
         "description": "Get p50/p95/p99 latency for a service. Shows if latency is spiking.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -182,7 +182,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_saturation_metrics",
         "description": "Get CPU usage, memory usage, and container restart counts for a service. USE method analysis.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -194,7 +194,7 @@ DIAGNOSTIC_TOOLS = [
     {
         "name": "get_error_rate_history",
         "description": "Get the HTTP error rate percentage for a service over time from Prometheus.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "tenant_id": {"type": "string"},
@@ -205,6 +205,8 @@ DIAGNOSTIC_TOOLS = [
         },
     },
 ]
+
+DIAGNOSTIC_TOOLS = [{"function_declarations": _RAW_TOOLS}]
 
 # ─── Tool → MCP Server Routing ───────────────────────────────────────
 # Maps each tool name to the MCP server URL that can execute it.

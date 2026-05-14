@@ -2,8 +2,7 @@ import json
 from uuid import uuid4
 from datetime import datetime
 
-import anthropic
-
+from google import genai
 from shared.models.alert import AlertEvent, Severity
 from shared.models.incident import IncidentContext, IncidentStatus
 from shared.pg_client import PostgresClient
@@ -17,7 +16,7 @@ log = get_logger("triage-agent")
 class TriageAgent:
     def __init__(self, pg_client: PostgresClient):
         self.pg = pg_client
-        self.llm = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.llm = genai.Client(api_key=settings.gemini_api_key)
         self.embedding_service = EmbeddingService()
 
     async def process_alert(self, alert: AlertEvent) -> IncidentContext | None:
@@ -100,18 +99,19 @@ class TriageAgent:
         """
         
         try:
-            response = await self.llm.messages.create(
-                model=settings.anthropic_model,
-                system=triage_settings.system_prompt,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=triage_settings.agent_temperature,
-                max_tokens=500
+            response = await self.llm.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=triage_settings.system_prompt,
+                    temperature=triage_settings.agent_temperature,
+                    max_output_tokens=500,
+                    response_mime_type="application/json",
+                )
             )
             
             # Extract JSON block
-            raw_text = response.content[0].text
+            raw_text = response.text
             
             # Simple heuristic to extract JSON if Claude wrapped it in markdown
             if "{" in raw_text and "}" in raw_text:

@@ -17,8 +17,7 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import anthropic
-
+from google import genai
 from shared.models.incident import (
     IncidentContext, IncidentStatus, Action, RiskLevel,
 )
@@ -57,7 +56,7 @@ def _get_tool_function(tool_fn: str):
 
 class RemediationAgent:
     def __init__(self, redis: RedisClient):
-        self.llm = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.llm = genai.Client(api_key=settings.gemini_api_key)
         self.redis = redis
 
     async def remediate(self, incident: IncidentContext) -> IncidentContext:
@@ -107,6 +106,8 @@ class RemediationAgent:
                     incident_id=incident.incident_id,
                     action_summary=f"{action.tool_fn}({action.parameters}) — {action.reasoning}",
                     risk_level=action.risk_level.value,
+                    alert_name=incident.alert.name,
+                    service=incident.alert.service,
                 )
 
                 # Wait for approval
@@ -188,15 +189,18 @@ Generate a remediation plan. Remember: the tenant_id is "{incident.tenant_id}" a
 """
 
         try:
-            response = await self.llm.messages.create(
-                model=settings.anthropic_model,
-                system=REMEDIATION_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=AGENT_TEMPERATURE,
-                max_tokens=MAX_TOKENS,
+            response = await self.llm.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=REMEDIATION_SYSTEM_PROMPT,
+                    temperature=AGENT_TEMPERATURE,
+                    max_output_tokens=MAX_TOKENS,
+                    response_mime_type="application/json",
+                )
             )
 
-            raw_text = response.content[0].text
+            raw_text = response.text
             plan_data = self._parse_plan(raw_text)
 
             actions = []
