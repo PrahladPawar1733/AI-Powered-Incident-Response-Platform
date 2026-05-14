@@ -16,8 +16,6 @@ A single pane of glass to monitor all incidents flowing through the autonomous p
 ### Slack Integrations & Human-in-the-Loop
 Per-tenant Slack notifications formatted with Block Kit. Agents provide detailed summaries of the incident, confidence scores, matched runbooks, and request human approval for high-risk remediation actions.
 
-![Slack Notifications](docs/slack-notifications.jpeg)
-
 ### Event-Driven Architecture
 Powered by Apache Kafka, ensuring decoupled, scalable, and resilient communication between the Alert Ingestor, Triage Agent, Diagnosis Agent, and Remediation Agent.
 
